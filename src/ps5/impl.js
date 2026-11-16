@@ -162,9 +162,29 @@ async function post_jailbreak() {
   mem.copy(map_addr, kexp_addr, kexp_u8.length);
 
   const pthread_addr_addr = mem.alloc(8);
-  const payload_args = mem.alloc(0x28);
+  const payload_args = mem.alloc(0x38);
 
   logger.debug(`payload_args: ${payload_args}`);
+
+  // Build KXP2 apiTable (12 × 8 bytes = 96 bytes)
+  // Index:  0=sceKernelSendNotificationRequest, 1=sysctlbyname, 2-3=unused(0),
+  //         4=getpid, 5=malloc, 6=free, 7=memcpy, 8=memset, 9=strcmp, 10=memcmp, 11=vsnprintf
+  const api_table = mem.alloc(12 * 8);
+  mem.bset(api_table, 12 * 8);  // zero all slots
+
+  const lk = libkernel_base;
+  const lc = libc_base;
+  arw.view(api_table).setBInt(0 * 8, lk.add(impl.lk_sceKernelSendNotificationRequest), true);
+  arw.view(api_table).setBInt(1 * 8, lk.add(impl.lk_sysctlbyname), true);
+  // slots 2 and 3 remain 0 (unused)
+  arw.view(api_table).setBInt(4 * 8, lk.add(impl.lk_getpid), true);
+  arw.view(api_table).setBInt(5 * 8, lc.add(impl.lc_malloc), true);
+  arw.view(api_table).setBInt(6 * 8, lc.add(impl.lc_free), true);
+  arw.view(api_table).setBInt(7 * 8, lc.add(impl.lc_memcpy), true);
+  arw.view(api_table).setBInt(8 * 8, lc.add(impl.lc_memset), true);
+  arw.view(api_table).setBInt(9 * 8, lc.add(impl.lc_strcmp), true);
+  arw.view(api_table).setBInt(10 * 8, lc.add(impl.lc_memcmp), true);
+  arw.view(api_table).setBInt(11 * 8, lc.add(impl.lc_vsnprintf), true);
 
   arw.view(payload_args).setInt32(0x00, master_pipe[0], true);
   arw.view(payload_args).setInt32(0x04, master_pipe[1], true);
@@ -173,6 +193,10 @@ async function post_jailbreak() {
   arw.view(payload_args).setBInt(0x10, allproc, true);
   arw.view(payload_args).setBInt(0x18, elfldr_addr, true);
   arw.view(payload_args).setBInt(0x20, elfldr_size, true);
+  // KXP2 extension
+  arw.view(payload_args).setInt32(0x28, 0x4B585032, true); // 'KXP2' magic
+  arw.view(payload_args).setInt32(0x2c, 12, true);         // api entry count
+  arw.view(payload_args).setBInt(0x30, api_table, true);   // pointer to api table
 
   if (fn.pthread_create.invoke(pthread_addr_addr, 0, map_addr, payload_args)) {
     throw new Error('Unable to create bin thread !!');
@@ -206,6 +230,7 @@ async function post_jailbreak() {
 
   mem.free(pthread_addr_addr);
   mem.free(payload_args);
+  mem.free(api_table);
   mem.free(ret_addr);
 }
 
@@ -362,6 +387,17 @@ const impl_map = {
       lk__error: 0x1e7b0,
       lc_strerror: 0x75060,
 
+      lk_getpid: 0x36760,
+      lk_sysctlbyname: 0x27330,
+      lk_sceKernelSendNotificationRequest: 0x8be0,
+      lc_malloc: 0x5e80,
+      lc_free: 0x5e90,
+      lc_memcpy: 0x3cd0,
+      lc_memset: 0x14e70,
+      lc_strcmp: 0x408d0,
+      lc_memcmp: 0x40890,
+      lc_vsnprintf: 0x5c620,
+
       wk_pthread_create: 0x3670c80,
       wk_pthread_join: 0x3670cc0,
       wk_expm1_builtin: 0x10f88,
@@ -437,6 +473,10 @@ const impl_map = {
 
       lk_close: 0x37250,
       lk__error: 0x1e7f0,
+
+      // fw 7.20+ has different getpid/sysctlbyname; rest inherited from 7[0]
+      lk_getpid: 0x367a0,
+      lk_sysctlbyname: 0x27370,
     },
     0x40: {
       wk_pthread_create: 0x3670f60,
@@ -579,6 +619,17 @@ const impl_map = {
       lk_close: 0x1af90,
       lk__error: 0xeb50,
       lc_strerror: 0x78530,
+
+      lk_getpid: 0x1a4e0,
+      lk_sysctlbyname: 0x12d80,
+      lk_sceKernelSendNotificationRequest: 0x4430,
+      lc_malloc: 0x6010,
+      lc_free: 0x6020,
+      lc_memcpy: 0x3e50,
+      lc_memset: 0x14ce0,
+      lc_strcmp: 0x3fc00,
+      lc_memcmp: 0x3fbc0,
+      lc_vsnprintf: 0x5bf60,
 
       wk_pthread_create: 0x366ce70,
       wk_pthread_join: 0x366ceb0,
@@ -726,6 +777,17 @@ const impl_map = {
       lk_close: 0x1b7b0,
       lk__error: 0xf160,
       lc_strerror: 0x765a0,
+
+      lk_getpid: 0x1ad00,
+      lk_sysctlbyname: 0x134e0,
+      lk_sceKernelSendNotificationRequest: 0x4590,
+      lc_malloc: 0x5ff0,
+      lc_free: 0x6000,
+      lc_memcpy: 0x3e50,
+      lc_memset: 0x14b90,
+      lc_strcmp: 0x3f9b0,
+      lc_memcmp: 0x3f970,
+      lc_vsnprintf: 0x5ba80,
 
       wk_pthread_create: 0x2b3d0b0,
       wk_pthread_join: 0x2b3d0f0,
@@ -982,6 +1044,17 @@ const impl_map = {
       lk__error: 0xf0d0,
       lc_strerror: 0x76030,
 
+      lk_getpid: 0x1af60,
+      lk_sysctlbyname: 0x134b0,
+      lk_sceKernelSendNotificationRequest: 0x45c0,
+      lc_malloc: 0x5f30,
+      lc_free: 0x5f40,
+      lc_memcpy: 0x3d10,
+      lc_memset: 0x15170,
+      lc_strcmp: 0x3fcf0,
+      lc_memcmp: 0x75650,
+      lc_vsnprintf: 0x5b9c0,
+
       wk_pthread_create: 0x2d3a310,
       wk_pthread_join: 0x2d3a350,
       wk_expm1_builtin: 0x1cd0,
@@ -1063,6 +1136,17 @@ const impl_map = {
       lk_close: 0x1bd30,
       lk__error: 0xf340,
       lc_strerror: 0x77070,
+
+      lk_getpid: 0x1b280,
+      lk_sysctlbyname: 0x137e0,
+      lk_sceKernelSendNotificationRequest: 0x4740,
+      lc_malloc: 0x5eb0,
+      lc_free: 0x5ec0,
+      lc_memcpy: 0x3d50,
+      lc_memset: 0x14e80,
+      lc_strcmp: 0x3fd80,
+      lc_memcmp: 0x76660,
+      lc_vsnprintf: 0x5c430,
 
       wk_pthread_create: 0x2c784a0,
       wk_pthread_join: 0x2c784e0,
@@ -1211,6 +1295,17 @@ const impl_map = {
       lk__error: 0xf740,
       lc_strerror: 0x79160,
 
+      lk_getpid: 0x1b7d0,
+      lk_sysctlbyname: 0x13bb0,
+      lk_sceKernelSendNotificationRequest: 0x48b0,
+      lc_malloc: 0x60f0,
+      lc_free: 0x6100,
+      lc_memcpy: 0x3d80,
+      lc_memset: 0x15bf0,
+      lc_strcmp: 0x407c0,
+      lc_memcmp: 0x78750,
+      lc_vsnprintf: 0x5cf50,
+
       wk_pthread_create: 0x2c908a0,
       wk_pthread_join: 0x2c908e0,
       wk_expm1_builtin: 0x3b680,
@@ -1280,6 +1375,8 @@ const impl_map = {
     },
     0x40: {
       lk_close: 0x1c2a0,
+      // fw 12.40+ getpid differs; rest inherits from 12[0]
+      lk_getpid: 0x1b7f0,
     },
     0x60: {
       k_route_output_rtmsg2_ret: 0xb6eb51,
@@ -1295,6 +1392,17 @@ const impl_map = {
       lk_close: 0x1c310,
       lk__error: 0xf7d0,
       lc_strerror: 0x7b730,
+
+      lk_getpid: 0x1b860,
+      lk_sysctlbyname: 0x13c60,
+      lk_sceKernelSendNotificationRequest: 0x48b0,
+      lc_malloc: 0x4e60,
+      lc_free: 0x4e70,
+      lc_memcpy: 0x3e00,
+      lc_memset: 0x14700,
+      lc_strcmp: 0x42910,
+      lc_memcmp: 0x7ad20,
+      lc_vsnprintf: 0x5f6a0,
 
       wk_pthread_create: 0x2ad7ee0,
       wk_pthread_join: 0x2ad7f20,
