@@ -92,7 +92,7 @@ async function send_payload(payload_u8) {
 
     const sa = mem.alloc(16);
     mem.bset(sa, 16);
-    [16, 2, 0x23, 0x3d, 127, 0, 0, 1].forEach((v, i) => arw.view(sa.add32(i)).setUint8(0, v));
+    [16, 2, 0x23, 0x3d, 127, 0, 0, 1].forEach((v, i) => arw.view(sa).setUint8(i, v));
 
     const res = fn.connect.invoke(fd, sa, 16);
     mem.free(sa);
@@ -120,7 +120,7 @@ async function send_payload(payload_u8) {
   let sent = 0;
   while (sent < payload_size) {
     const want = Math.min(0x10000, payload_size - sent);
-    const result = fn.write.invoke(fd, payload_addr.add32(sent), want);
+    const result = fn.write.invoke(fd, payload_addr.add(sent), want);
     const count = Number(result);
     if (count <= 0) break;
     sent += count;
