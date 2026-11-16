@@ -77,6 +77,60 @@ function patch_proc(p, kp) {
   kview(eboot_segments).setBInt(0x10, -1, true); // size
 }
 
+async function send_payload() {
+  const payload_u8 = await load_file('src/ps5/payload.elf');
+  const payload_size = payload_u8.length;
+
+  const payload_addr = payload_u8.buffer.data();
+
+  if (!fn.hasOwnProperty('connect')) {
+    fn.connect = new NativeFunction(0x62, 'number');
+  }
+
+  async function try_connect() {
+    const fd = fn.socket.invoke(2, 1, 0);
+    if (fd === -1) return -1;
+
+    const sa = mem.alloc(16);
+    mem.bset(sa, 16);
+    [16, 2, 0x23, 0x3d, 127, 0, 0, 1].forEach((v, i) => arw.view(sa.add32(i)).setUint8(0, v));
+
+    const res = fn.connect.invoke(fd, sa, 16);
+    mem.free(sa);
+
+    if (res === 0) return fd;
+    fn.close.invoke(fd);
+    return -1;
+  }
+
+  logger.info('Waiting for elfldr on port 9021...');
+  let fd = -1;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    fd = await try_connect();
+    if (fd >= 0) break;
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+
+  if (fd < 0) {
+    logger.error('ELF loader did not start on port 9021 — payload not sent.');
+    return;
+  }
+
+  logger.info(`Connected to elfldr, sending payload.elf (${payload_size} bytes)...`);
+
+  let sent = 0;
+  while (sent < payload_size) {
+    const want = Math.min(0x10000, payload_size - sent);
+    const result = fn.write.invoke(fd, payload_addr.add32(sent), want);
+    const count = Number(result);
+    if (count <= 0) break;
+    sent += count;
+  }
+
+  logger.info(`Payload sent (${sent} bytes).`);
+  fn.close.invoke(fd);
+}
+
 async function post_jailbreak() {
   const kexp_u8 = await load_file('src/ps5/kexp.bin');
   const elfldr_u8 = await load_file('src/ps5/elfldr.elf');
@@ -136,6 +190,9 @@ async function post_jailbreak() {
   const ret = arw.view(ret_addr).getInt32(0, true);
 
   logger.info(`bin returned ${ret} !!`);
+
+  // elfldr is now running — send payload.elf to port 9021
+  await send_payload();
 
   if (fn.munmap.invoke(map_addr, kexp_page_size)) {
     throw new SyscallError(`Unable to munmap ${map_addr} !!`);
@@ -1240,8 +1297,8 @@ const impl_map = {
       wk_pthread_create: 0x2ad7ee0,
       wk_pthread_join: 0x2ad7f20,
       wk_expm1_builtin: 0x57850,
-      wk___imp___error: 0x2ad6340,
-      wk___imp_strerror: 0x2ad6380,
+      wk___imp___error: 0x3352230,
+      wk___imp_strerror: 0x3352250,
 
       get wk_LEAVE_RET() {
         return webkit_base.add(0x29a4b7b);
