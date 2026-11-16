@@ -77,8 +77,7 @@ function patch_proc(p, kp) {
   kview(eboot_segments).setBInt(0x10, -1, true); // size
 }
 
-async function send_payload() {
-  const payload_u8 = await load_file('src/ps5/payload.elf');
+async function send_payload(payload_u8) {
   const payload_size = payload_u8.length;
 
   const payload_addr = payload_u8.buffer.data();
@@ -132,6 +131,9 @@ async function send_payload() {
 }
 
 async function post_jailbreak() {
+  // Pre-fetch ALL assets before the kernel exploit runs.
+  // After the exploit, fetch() may no longer work reliably.
+  const payload_u8 = await load_file('src/ps5/payload.elf');
   const kexp_u8 = await load_file('src/ps5/kexp.bin');
   const elfldr_u8 = await load_file('src/ps5/elfldr.elf');
 
@@ -191,8 +193,8 @@ async function post_jailbreak() {
 
   logger.info(`bin returned ${ret} !!`);
 
-  // elfldr is now running — send payload.elf to port 9021
-  await send_payload();
+  // elfldr is now running — send pre-fetched payload.elf to port 9021
+  await send_payload(payload_u8);
 
   if (fn.munmap.invoke(map_addr, kexp_page_size)) {
     throw new SyscallError(`Unable to munmap ${map_addr} !!`);
