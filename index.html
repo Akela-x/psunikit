@@ -11,7 +11,7 @@
         font-family: 'Lucida Console', 'Courier New', 'Menlo';
       }
 
-      /* ── Экран кэша ───────────────────────────────────────────────── */
+      /* ── Cache screen ────────────────────────────────────────────── */
       #cache-screen {
         display: none;
         -webkit-box-sizing: border-box;
@@ -34,7 +34,7 @@
         font-size: 13px;
         letter-spacing: 3px;
         text-transform: uppercase;
-        color: #74c0fc;
+        color: #c1c2c5;
         margin-bottom: 20px;
         text-align: center;
       }
@@ -44,7 +44,7 @@
         height: 22px;
         background: rgba(255,255,255,0.06);
         border-radius: 11px;
-        border: 1px solid rgba(180,185,205,0.15);
+        border: 1px solid rgba(180,185,205,0.20);
         overflow: hidden;
         position: relative;
         margin-bottom: 12px;
@@ -52,15 +52,13 @@
       #cache-bar-fill {
         height: 100%;
         width: 0%;
-        background: -webkit-linear-gradient(left, #1e3a6e, #4f9cff);
-        background: linear-gradient(90deg, #1e3a6e, #4f9cff);
+        background: #4a4d55;
         border-radius: 11px;
         -webkit-transition: width 0.3s ease;
         transition: width 0.3s ease;
       }
       #cache-bar-fill.done {
-        background: -webkit-linear-gradient(left, #1a6b3a, #51cf66);
-        background: linear-gradient(90deg, #1a6b3a, #51cf66);
+        background: #4a4d55;
       }
       #cache-bar-label {
         position: absolute;
@@ -74,11 +72,11 @@
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 2px;
-        color: #c8deff;
+        color: #c1c2c5;
         pointer-events: none;
       }
       #cache-bar-label.done {
-        color: #0a2a14;
+        color: #c1c2c5;
       }
       #cache-status {
         font-size: 12px;
@@ -97,7 +95,7 @@
         color: #ff6b6b;
       }
 
-      /* ── Консоль эксплойта ────────────────────────────────────────── */
+      /* ── Exploit console ─────────────────────────────────────────── */
       #console {
         width: 100%;
         height: 100%;
@@ -116,23 +114,23 @@
   </head>
   <body>
 
-    <!-- Экран кэша (показывается при первой загрузке) -->
+    <!-- Cache screen (shown on first load) -->
     <div id="cache-screen">
-      <div id="cache-title">PSUniKit — Кэширование</div>
+      <div id="cache-title">PSUniKit — Caching</div>
       <div id="cache-bar-wrap">
         <div id="cache-bar-fill"></div>
         <div id="cache-bar-label">0%</div>
       </div>
-      <div id="cache-status">Загрузка...</div>
+      <div id="cache-status">Loading...</div>
     </div>
 
-    <!-- Консоль эксплойта (показывается при офлайн-запуске) -->
+    <!-- Exploit console (shown during offline run) -->
     <pre id="console"></pre>
 
     <script>
     (function() {
       var cache = window.applicationCache;
-      if (!cache) return; // браузер не поддерживает AppCache
+      if (!cache) return; // browser does not support AppCache
 
       var screen  = document.getElementById('cache-screen');
       var fill    = document.getElementById('cache-bar-fill');
@@ -142,7 +140,7 @@
 
       function showCacheScreen() {
         screen.className = 'visible';
-        // Скрыть консоль (она нужна только для эксплойта)
+        // Hide console (only needed for the exploit)
         document.getElementById('console').style.display = 'none';
       }
 
@@ -155,15 +153,15 @@
         }
       }
 
-      // Уже закэшировано → грузим эксплойт напрямую
+      // Already cached → load exploit directly
       if (cache.status === cache.IDLE || cache.status === cache.OBSOLETE) {
         loadMainScript();
         return;
       }
 
-      // Идёт кэширование → показываем прогресс
+      // Caching in progress → show progress screen
       showCacheScreen();
-      status.textContent = 'Скачивание файлов...';
+      status.textContent = 'Downloading files...';
 
       cache.addEventListener('progress', function(e) {
         if (e.lengthComputable && e.total > 0) {
@@ -176,11 +174,11 @@
       cache.addEventListener('cached', function() {
         setProgress(100);
         status.className = 'ready';
-        status.textContent = 'Кэш установлен — отключите интернет и перезапустите консоль';
+        status.textContent = 'Cache installed';
       });
 
       cache.addEventListener('noupdate', function() {
-        // Кэш актуален → запускаем эксплойт
+        // Cache up to date → run exploit
         screen.className = '';
         document.getElementById('console').style.display = '';
         loadMainScript();
@@ -195,7 +193,7 @@
 
       cache.addEventListener('error', function() {
         if (cache.status === cache.IDLE || cache.status === cache.OBSOLETE) {
-          // Офлайн, кэш есть → запускаем
+          // Offline, cache present → run
           screen.className = '';
           document.getElementById('console').style.display = '';
           loadMainScript();
@@ -205,7 +203,7 @@
           fill.className = '';
           label.className = '';
           status.className = 'error';
-          status.textContent = 'Ошибка кэша — очистите данные браузера и перезапустите';
+          status.textContent = 'Cache error — clear browser data and restart';
         }
       });
 
